@@ -23,7 +23,6 @@ return function(Dax)
             Dax.Camera=Workspace.CurrentCamera or Dax.Camera
             for p,d in pairs(App.ESPObjects) do Dax.Features.ESP.update(p,d) end
             if Dax.Features.Aimbot and Dax.Features.Aimbot.update then Dax.Features.Aimbot.update(dt) end
-            if Dax.Features.SilentAim and Dax.Features.SilentAim.update then Dax.Features.SilentAim.update() end
             if Dax.Features.Triggerbot and Dax.Features.Triggerbot.update then Dax.Features.Triggerbot.update() end
             if Dax.Features.Crosshair and Dax.Features.Crosshair.update then Dax.Features.Crosshair.update(dt) end
         end)

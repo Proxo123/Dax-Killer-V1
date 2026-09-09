@@ -1,7 +1,7 @@
 return function(Dax)
     local Config={
         UI={MenuKey="Insert",PanicKey="End",Scale=100,Notifications=true,Accent={125,92,255}},
-        Combat={Enabled=true,AimKey="MouseButton2",TeamCheck=true,WallCheck=true,TargetPart="Head",FOV=200,Smoothness=12,LockTarget=true,ShowFOV=true,SilentAim=false,SilentTracer=true,Triggerbot=false,TriggerDelay=0.08},
+        Combat={Enabled=true,AimKey="MouseButton2",TeamCheck=true,WallCheck=true,TargetPart="Head",FOV=200,Smoothness=12,LockTarget=true,ShowFOV=true,Triggerbot=false,TriggerDelay=0.08},
         ESP={Enabled=true,Boxes=true,Skeletons=true,Wireframe=false,Tracers=true,Names=true,Distance=true,Health=true,ShowTeam=true,MaxDistance=2500,Thickness=1,Opacity=95,TracerOrigin="Bottom",EnemyColor={255,74,92},TeamColor={70,180,255}},
         Crosshair={Enabled=true,Color={255,255,255},Gap=5,ArmLength=15,BendLength=9,Thickness=2,Speed=120,Direction="Clockwise",CenterDot=false},
         Weapons={NoSpread=false,NoRecoil=false,InstantEquip=false,AlwaysAuto=false,InstantReload=false,InfiniteAmmo=false,RapidFire=false}
@@ -25,8 +25,6 @@ return function(Dax)
     end
     function Dax.normalize()
         local Config=Dax.Config
-        if Config.Combat.SilentAim==nil then Config.Combat.SilentAim=false end
-        if Config.Combat.SilentTracer==nil then Config.Combat.SilentTracer=true end
         if Config.Combat.Triggerbot==nil then Config.Combat.Triggerbot=false end
         if Config.Combat.TriggerDelay==nil then Config.Combat.TriggerDelay=0.08 end
         Config.UI.Scale=math.clamp(Config.UI.Scale,75,130)

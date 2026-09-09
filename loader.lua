@@ -10,7 +10,6 @@ local ORDER={
     "ui/menu.lua",
     "features/esp.lua",
     "features/aimbot.lua",
-    "features/silentaim.lua",
     "features/triggerbot.lua",
     "features/crosshair.lua",
     "features/runtime.lua",
