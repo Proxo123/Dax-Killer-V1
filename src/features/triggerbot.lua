@@ -9,6 +9,7 @@ return function(Dax)
     local targetSince=0
     local trackedTarget=nil
     local firedForTarget=false
+    local clearSince=nil
     local function playerFromHit(inst)
         if not inst then return nil end
         local model=inst:FindFirstAncestorOfClass("Model")
@@ -40,6 +41,21 @@ return function(Dax)
         return player
     end
     local function click()
+        if mouse1press and mouse1release then
+            task.spawn(function()
+                local pressed=false
+                local ok=pcall(function()
+                    mouse1press()
+                    pressed=true
+                    task.wait(0.035)
+                    mouse1release()
+                    pressed=false
+                end)
+                if pressed then pcall(mouse1release) end
+                if not ok then pcall(mouse1release) end
+            end)
+            return true
+        end
         if mouse1click then
             task.spawn(function() pcall(mouse1click) end)
             return true
@@ -50,6 +66,7 @@ return function(Dax)
         if not Config.Combat.Triggerbot or not App.Alive then
             trackedTarget=nil
             firedForTarget=false
+            clearSince=nil
             return
         end
         local menu=Dax.UI.Window
@@ -57,10 +74,17 @@ return function(Dax)
         if UIS:GetFocusedTextBox() then return end
         local target=targetUnderCrosshair()
         if not target then
-            trackedTarget=nil
-            firedForTarget=false
+            if trackedTarget then
+                clearSince=clearSince or tick()
+                if tick()-clearSince>=0.15 then
+                    trackedTarget=nil
+                    firedForTarget=false
+                    clearSince=nil
+                end
+            end
             return
         end
+        clearSince=nil
         if target~=trackedTarget then
             trackedTarget=target
             targetSince=tick()
