@@ -22,13 +22,13 @@ return function(Dax)
         Dax.Camera=Workspace.CurrentCamera or Dax.Camera
         for p,d in pairs(App.ESPObjects) do Dax.Features.ESP.update(p,d) end
         Dax.Features.Aimbot.update(dt)
+        Dax.Features.Triggerbot.update()
         Dax.Features.Crosshair.update(dt)
     end)
     function App:Unload()
         if not self.Alive then return end
         Dax.saveAutosave()
         self.Alive=false
-        if Dax.Features.Redirect and Dax.Features.Redirect.unhook then Dax.Features.Redirect.unhook() end
         if Dax.Features.Weapons and Dax.Features.Weapons.restore then Dax.Features.Weapons.restore() end
         local mods=Dax.Features.Weapons and Dax.Features.Weapons.Mods
         if mods then
