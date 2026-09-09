@@ -21,7 +21,7 @@ return function(Dax)
     Dax.Features={}
     local parent=(type(gethui)=="function" and gethui()) or CoreGui
     local gui=Instance.new("ScreenGui")
-    gui.Name="DaxKillerMenu"
+    gui.Name="UnnamedCheatsMenu"
     gui.ResetOnSpawn=false
     gui.IgnoreGuiInset=true
     gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling

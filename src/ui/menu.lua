@@ -31,7 +31,7 @@ return function(Dax)
     title.TextSize=SIZE
     title.TextColor3=WHITE
     title.TextXAlignment=Enum.TextXAlignment.Left
-    title.Text="DAX KILLER @ "..os.date("%b %d %Y %H:%M:%S").." (INSERT)"
+    title.Text="Unnamed Cheats @ "..os.date("%b %d %Y %H:%M:%S").." (INSERT)"
     title.Parent=header
     local tabBar=Instance.new("Frame")
     tabBar.BackgroundTransparency=1
