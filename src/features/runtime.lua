@@ -30,7 +30,7 @@ return function(Dax)
     end)
     function App:Unload()
         if not self.Alive then return end
-        Dax.saveAutosave()
+        Dax.saveOnLeave()
         self.Alive=false
         if Dax.Features.Weapons and Dax.Features.Weapons.restore then Dax.Features.Weapons.restore() end
         local mods=Dax.Features.Weapons and Dax.Features.Weapons.Mods
@@ -51,5 +51,8 @@ return function(Dax)
         env.RotatingXCrosshair=nil
         env.DaxKiller=nil
     end
-    if game.BindToClose then pcall(function() game:BindToClose(function() Dax.saveAutosave() end) end) end
+    Dax.bind(Dax.Services.Players.PlayerRemoving,function(player)
+        if player==Dax.LP then Dax.saveOnLeave() end
+    end)
+    if game.BindToClose then pcall(function() game:BindToClose(function() Dax.saveOnLeave() end) end) end
 end

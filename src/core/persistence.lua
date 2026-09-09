@@ -11,6 +11,7 @@ return function(Dax)
     end
     local memoryProfiles={}
     local savedProfiles={"default"}
+    local saveToken=0
     local function profilePath(n) return folder.."/"..n..".json" end
     local function sanitizeName(n) n=tostring(n or ""):gsub("[^%w_%-]",""):sub(1,32) return n=="" and "default" or n end
     function Dax.listSavedProfiles()
@@ -20,7 +21,7 @@ return function(Dax)
             local ok,files=pcall(function() return listfiles(folder) end)
             if ok and type(files)=="table" then
                 for _,file in ipairs(files) do
-                    local name=file:match("^(.+)%.json$")
+                    local name=file:match("([^/\\]+)%.json$")
                     if name and name~="_autosave" and name~="_meta" and not seen[name] then seen[name]=true table.insert(names,name) end
                 end
             end
@@ -74,16 +75,40 @@ return function(Dax)
         memoryProfiles[AUTOSAVE_NAME]=encoded
         if persistent then pcall(function() writefile(profilePath(AUTOSAVE_NAME),encoded) end) writeMeta() end
     end
+    function Dax.scheduleAutosave()
+        saveToken+=1
+        local token=saveToken
+        task.delay(1,function()
+            if token~=saveToken or not App.Alive then return end
+            Dax.saveAutosave()
+        end)
+    end
+    function Dax.saveOnLeave()
+        if not App.Alive then return end
+        pcall(function()
+            Dax.normalize()
+            local encoded=HttpService:JSONEncode(Config)
+            memoryProfiles[AUTOSAVE_NAME]=encoded
+            if persistent then
+                pcall(function() writefile(profilePath(AUTOSAVE_NAME),encoded) end)
+                writeProfileEncoded(sanitizeName(App.Profile),encoded)
+            end
+            writeMeta()
+        end)
+    end
     App.SaveAutosave=Dax.saveAutosave
-    function Dax.saveProfile()
+    function Dax.saveProfile(silent)
         Dax.normalize()
         local n=sanitizeName(App.Profile)
         local ok,err=writeProfileEncoded(n,HttpService:JSONEncode(Config))
-        if not ok then Dax.UI.notify("Save failed: "..tostring(err)) return end
+        if not ok then
+            if not silent and Dax.UI.notify then Dax.UI.notify("Save failed: "..tostring(err)) end
+            return
+        end
         Dax.listSavedProfiles()
         writeMeta()
         if Dax.UI.refreshProfilePicker then Dax.UI.refreshProfilePicker() end
-        Dax.UI.notify("Saved profile: "..n)
+        if not silent and Dax.UI.notify then Dax.UI.notify("Saved profile: "..n) end
     end
     function Dax.loadProfileByName(name)
         name=sanitizeName(name)
@@ -92,6 +117,7 @@ return function(Dax)
         local ok,data=pcall(function() return HttpService:JSONDecode(encoded) end)
         if not ok or not Dax.applyConfig(data,name) then Dax.UI.notify("Invalid profile: "..name) return false end
         if Dax.UI.refreshProfilePicker then Dax.UI.refreshProfilePicker() end
+        Dax.scheduleAutosave()
         Dax.UI.notify("Loaded profile: "..name)
         return true
     end

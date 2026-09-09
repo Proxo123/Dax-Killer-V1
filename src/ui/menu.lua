@@ -54,6 +54,7 @@ return function(Dax)
     body.Parent=root
     local pages={}
     local tabBtns={}
+    local function markDirty() if Dax.scheduleAutosave then Dax.scheduleAutosave() end end
     local function showTab(name)
         for n,p in pairs(pages) do p.Visible=n==name end
         for n,b in pairs(tabBtns) do b.BackgroundColor3=n==name and WHITE or TAB end
@@ -145,7 +146,7 @@ return function(Dax)
         lbl.Interactable=false
         lbl.Parent=row
         local function refresh() mark.Visible=get() end
-        row.Activated:Connect(function() set(not get()) refresh() end)
+        row.Activated:Connect(function() set(not get()) markDirty() refresh() end)
         table.insert(App.Controls,refresh)
         refresh()
         return row
@@ -194,6 +195,7 @@ return function(Dax)
         local function setFrom(x)
             local a=math.clamp((x-track.AbsolutePosition.X)/math.max(track.AbsoluteSize.X,1),0,1)
             set(min+(max-min)*a)
+            markDirty()
             refresh()
         end
         track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=true setFrom(i.Position.X) end end)
@@ -220,11 +222,92 @@ return function(Dax)
             local cur=get()
             local idx=table.find(options,cur) or 0
             set(options[idx%#options+1])
+            markDirty()
             refresh()
         end)
         table.insert(App.Controls,refresh)
         refresh()
         return btn
+    end
+    local function addDropdown(page,text,getOptions,get,set)
+        local wrap=Instance.new("Frame")
+        wrap.BackgroundTransparency=1
+        wrap.Size=UDim2.new(1,-8,0,20)
+        wrap.ClipsDescendants=false
+        wrap.Parent=page
+        local btn=Instance.new("TextButton")
+        btn.AutoButtonColor=true
+        btn.BackgroundColor3=TAB
+        btn.BorderSizePixel=1
+        btn.BorderColor3=BLACK
+        btn.Size=UDim2.new(1,0,0,20)
+        btn.Font=FONT
+        btn.TextSize=SIZE
+        btn.TextColor3=BLACK
+        btn.TextXAlignment=Enum.TextXAlignment.Left
+        btn.ZIndex=3
+        btn.Parent=wrap
+        local list=Instance.new("Frame")
+        list.Visible=false
+        list.BackgroundColor3=WHITE
+        list.BorderSizePixel=1
+        list.BorderColor3=BLACK
+        list.Position=UDim2.fromOffset(0,22)
+        list.Size=UDim2.new(1,0,0,0)
+        list.AutomaticSize=Enum.AutomaticSize.Y
+        list.ZIndex=10
+        list.Parent=wrap
+        local listLayout=Instance.new("UIListLayout")
+        listLayout.Padding=UDim.new(0,0)
+        listLayout.Parent=list
+        local open=false
+        local function closeList() open=false list.Visible=false end
+        local function rebuildList()
+            for _,child in ipairs(list:GetChildren()) do
+                if child:IsA("TextButton") then child:Destroy() end
+            end
+            for _,opt in ipairs(getOptions()) do
+                local optBtn=Instance.new("TextButton")
+                optBtn.AutoButtonColor=true
+                optBtn.BackgroundColor3=opt==get() and BG or WHITE
+                optBtn.BorderSizePixel=0
+                optBtn.Size=UDim2.new(1,0,0,18)
+                optBtn.Font=FONT
+                optBtn.TextSize=SIZE
+                optBtn.TextColor3=BLACK
+                optBtn.TextXAlignment=Enum.TextXAlignment.Left
+                optBtn.Text="  "..tostring(opt)
+                optBtn.ZIndex=11
+                optBtn.Parent=list
+                optBtn.MouseButton1Click:Connect(function()
+                    set(opt)
+                    closeList()
+                    refresh()
+                end)
+            end
+        end
+        local function refresh() btn.Text="  "..text..": "..tostring(get()).."  v" end
+        btn.MouseButton1Click:Connect(function()
+            if open then closeList() return end
+            rebuildList()
+            open=true
+            list.Visible=true
+        end)
+        Dax.bind(UIS.InputBegan,function(input,processed)
+            if processed or not open or input.UserInputType~=Enum.UserInputType.MouseButton1 then return end
+            task.defer(function()
+                if not open then return end
+                local pos=input.Position
+                local function inside(guiObj)
+                    local a=guiObj.AbsolutePosition local s=guiObj.AbsoluteSize
+                    return pos.X>=a.X and pos.X<=a.X+s.X and pos.Y>=a.Y and pos.Y<=a.Y+s.Y
+                end
+                if not inside(btn) and not inside(list) then closeList() end
+            end)
+        end)
+        table.insert(App.Controls,refresh)
+        refresh()
+        return wrap,refresh,rebuildList,closeList
     end
     local function addButton(page,text,fn)
         local btn=Instance.new("TextButton")
@@ -285,19 +368,16 @@ return function(Dax)
     addCheck(modsPage,"no recoil",function() return Config.Weapons.NoRecoil end,function(v) Config.Weapons.NoRecoil=v if Dax.Features.Weapons then Dax.Features.Weapons.sync() end end)
     addLabel(miscPage,"menu: INSERT  |  panic: END")
     addCycle(miscPage,"menu key",{"Insert","RightShift","Home","Delete"},function() return Config.UI.MenuKey end,function(v) Config.UI.MenuKey=v end)
-    local profileLbl=addLabel(miscPage,"profile: "..App.Profile)
-    addButton(miscPage,"cycle profile",function()
-        local opts=Dax.listSavedProfiles()
-        local idx=table.find(opts,App.Profile) or 0
-        local nextName=opts[idx%#opts+1]
-        App.Profile=nextName
-        Dax.loadProfileByName(nextName)
-        profileLbl.Text="profile: "..nextName
-    end)
-    addButton(miscPage,"save profile",function() Dax.saveProfile() profileLbl.Text="profile: "..App.Profile end)
+    addLabel(miscPage,"-- profiles --")
+    local _,profileRefresh,profileRebuild=addDropdown(miscPage,"profile",function() return Dax.listSavedProfiles() end,function() return App.Profile end,function(name) Dax.loadProfileByName(name) end)
+    addButton(miscPage,"save profile",function() Dax.saveProfile() end)
+    addButton(miscPage,"new profile",function() Dax.createProfile() end)
     addButton(miscPage,"reset defaults",Dax.resetProfile)
     addButton(miscPage,"unload",function() App:Unload() end)
-    function Dax.UI.refreshProfilePicker() end
+    function Dax.UI.refreshProfilePicker()
+        if profileRefresh then profileRefresh() end
+        if profileRebuild then profileRebuild() end
+    end
     showTab("Aimbot")
     local dragging,dragStart,startPos=false,nil,nil
     header.InputBegan:Connect(function(i)
