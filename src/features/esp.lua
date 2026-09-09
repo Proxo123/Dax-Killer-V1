@@ -71,7 +71,6 @@ return function(Dax)
         d.HealthO.Position=Vector2.new(bx-1,pos.Y-1) d.HealthO.Size=Vector2.new(6,size.Y+2) d.HealthO.Transparency=alpha*.85 d.HealthO.Visible=Config.ESP.Health
         d.Health.Position=Vector2.new(bx,pos.Y+size.Y*(1-ratio)) d.Health.Size=Vector2.new(4,math.max(2,size.Y*ratio)) d.Health.Color=Color3.fromRGB(255*(1-ratio),255*ratio,70) d.Health.Transparency=alpha d.Health.Visible=Config.ESP.Health
         local nameText=player.DisplayName
-        if player.Team then nameText=nameText.."  ["..player.Team.Name.."]" end
         if Config.ESP.Health then nameText=nameText.."  "..Dax.formatHealth(health).." HP" end
         d.Name.Text=nameText d.Name.Position=Vector2.new(pos.X+size.X/2,pos.Y-17) d.Name.Color=color d.Name.Transparency=alpha d.Name.Visible=Config.ESP.Names or Config.ESP.Health
         local infos={}
