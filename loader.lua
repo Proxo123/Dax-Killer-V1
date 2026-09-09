@@ -1,4 +1,4 @@
-local REPO="https://raw.githubusercontent.com/Proxo123/Dax-Killer-V1/main/src/"
+local REPO=(type(getgenv)=="function" and getgenv().DAX_REPO) or "https://raw.githubusercontent.com/Proxo123/Dax-Killer-V1/main/src/"
 local ORDER={
     "core/bootstrap.lua",
     "core/config.lua",

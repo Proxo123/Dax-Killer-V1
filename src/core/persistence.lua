@@ -61,7 +61,7 @@ return function(Dax)
         Dax.normalize()
         App.Profile=sanitizeName(profileName or App.Profile)
         Dax.listSavedProfiles()
-        Dax.refreshAll()
+        if Dax.UI.applyTheme then Dax.UI.applyTheme() else Dax.refreshAll() end
         if Dax.UI.GuiScale then Dax.UI.GuiScale.Scale=Config.UI.Scale/100 end
         App.Target=nil
         if Dax.Features.Weapons and Dax.Features.Weapons.sync then Dax.Features.Weapons.sync() end
@@ -123,7 +123,7 @@ return function(Dax)
         for k in pairs(Config) do Config[k]=nil end
         Dax.mergeValid(Config,Dax.deepCopy(Dax.Defaults))
         Dax.normalize()
-        Dax.refreshAll()
+        if Dax.UI.applyTheme then Dax.UI.applyTheme() else Dax.refreshAll() end
         if Dax.UI.GuiScale then Dax.UI.GuiScale.Scale=Config.UI.Scale/100 end
         App.Target=nil
         if Dax.Features.Weapons and Dax.Features.Weapons.sync then Dax.Features.Weapons.sync() end

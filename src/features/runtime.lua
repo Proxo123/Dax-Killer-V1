@@ -7,37 +7,15 @@ return function(Dax)
     local TweenService=Dax.Services.TweenService
     local env=Dax.env
     Dax.bind(UIS.InputBegan,function(input,processed)
+        -- The armed keybind control owns the capture; it used to be resolved by
+        -- scanning App["KeySetter"..index] globals off the control list.
         if Dax.UI.Capture then
-            if Dax.keyName(input)~="Unknown" then
-                for idx,fn in ipairs(App.Controls) do
-                    local setter=App["KeySetter"..tostring(idx)]
-                    local refresher=App["KeyRefresh"..tostring(idx)]
-                    if setter and refresher and Dax.UI.Capture:GetAttribute("ControlIndex")==idx then
-                        setter(Dax.keyName(input))
-                        Dax.UI.Capture=nil
-                        refresher()
-                        Dax.UI.notify("Keybind set: "..Dax.keyName(input))
-                        return
-                    end
-                end
-            end
+            local name=Dax.keyName(input)
+            if name~="Unknown" then Dax.UI.finishCapture(name) end
             return
         end
         if Dax.keyMatches(input,Config.UI.PanicKey) then App:Unload() return end
-        if Dax.keyMatches(input,Config.UI.MenuKey) then
-            local window=Dax.UI.Window
-            local shadow=Dax.UI.Shadow
-            local outerGlow=Dax.UI.OuterGlow
-            local open=not window.Visible
-            window.Visible=open
-            shadow.Visible=open
-            outerGlow.Visible=open
-            if open then
-                window.Size=UDim2.fromOffset(586,444)
-                TweenService:Create(window,TweenInfo.new(.3,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.fromOffset(586,444)}):Play()
-            end
-            return
-        end
+        if Dax.keyMatches(input,Config.UI.MenuKey) then Dax.UI.toggleMenu() return end
         if not processed and Dax.keyMatches(input,Config.Combat.AimKey) then App.Aiming=true end
     end)
     Dax.bind(UIS.InputEnded,function(input)
