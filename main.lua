@@ -3,6 +3,7 @@ local RunService=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
 local HttpService=game:GetService("HttpService")
 local CoreGui=game:GetService("CoreGui")
+local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local Workspace=game:GetService("Workspace")
 local LP=Players.LocalPlayer
 local Camera=Workspace.CurrentCamera
@@ -18,7 +19,8 @@ local Config={
     UI={MenuKey="RightShift",PanicKey="End",Scale=100,Notifications=true,Accent={125,92,255}},
     Combat={Enabled=true,AimKey="MouseButton2",TeamCheck=true,WallCheck=true,TargetPart="Head",FOV=200,Smoothness=12,LockTarget=true,ShowFOV=true},
     ESP={Enabled=true,Boxes=true,Skeletons=true,Tracers=true,Names=true,Distance=true,Health=true,ShowTeam=true,MaxDistance=2500,Thickness=1,Opacity=95,TracerOrigin="Bottom",EnemyColor={255,74,92},TeamColor={70,180,255}},
-    Crosshair={Enabled=true,Color={255,255,255},Gap=5,ArmLength=15,BendLength=9,Thickness=2,Speed=120,Direction="Clockwise",CenterDot=false}
+    Crosshair={Enabled=true,Color={255,255,255},Gap=5,ArmLength=15,BendLength=9,Thickness=2,Speed=120,Direction="Clockwise",CenterDot=false},
+    Weapons={NoSpread=false,NoRecoil=false}
 }
 App.Config=Config
 
@@ -166,6 +168,7 @@ end
 local combatPage=addTab("Combat")
 local espPage=addTab("Visuals")
 local crossPage=addTab("Crosshair")
+local weaponsPage=addTab("Weapons")
 local settingsPage=addTab("Settings")
 local profilePage=addTab("Profiles")
 
@@ -263,6 +266,72 @@ addSlider(s,"Bend length",2,25,function() return Config.Crosshair.BendLength end
 addSlider(s,"Thickness",1,5,function() return Config.Crosshair.Thickness end,function(v) Config.Crosshair.Thickness=v end,"")
 addColor(s,"Crosshair color",function() return Config.Crosshair.Color end,function(v) Config.Crosshair.Color=v end)
 
+local WeaponsFolder=ReplicatedStorage:FindFirstChild("Weapons")
+local WeaponMods={Originals={},Connections={}}
+local function weaponValue(obj)
+    return obj and obj:IsA("ValueBase") and (obj.Name=="Spread" or obj.Name=="MaxSpread" or obj.Name=="RecoilControl")
+end
+local function rememberWeaponValue(obj)
+    if weaponValue(obj) and WeaponMods.Originals[obj]==nil then WeaponMods.Originals[obj]=obj.Value end
+end
+local function applyWeaponValue(obj)
+    if not weaponValue(obj) then return end
+    rememberWeaponValue(obj)
+    if Config.Weapons.NoSpread and (obj.Name=="Spread" or obj.Name=="MaxSpread") then obj.Value=0 end
+    if Config.Weapons.NoRecoil and obj.Name=="RecoilControl" then obj.Value=0 end
+end
+local function restoreWeaponValue(obj)
+    if not weaponValue(obj) then return end
+    local original=WeaponMods.Originals[obj]
+    if original==nil then return end
+    if obj.Name=="Spread" or obj.Name=="MaxSpread" then
+        if not Config.Weapons.NoSpread then obj.Value=original end
+    elseif obj.Name=="RecoilControl" and not Config.Weapons.NoRecoil then
+        obj.Value=original
+    end
+end
+local function scanWeapons(fn)
+    if not WeaponsFolder then return 0 end
+    local count=0
+    for _,weapon in ipairs(WeaponsFolder:GetChildren()) do
+        for _,obj in ipairs(weapon:GetDescendants()) do
+            if weaponValue(obj) then fn(obj); count+=1 end
+        end
+    end
+    return count
+end
+local function syncWeaponMods()
+    if not WeaponsFolder then return end
+    for obj,original in pairs(WeaponMods.Originals) do
+        if obj.Parent and weaponValue(obj) then
+            if obj.Name=="Spread" or obj.Name=="MaxSpread" then
+                obj.Value=Config.Weapons.NoSpread and 0 or original
+            elseif obj.Name=="RecoilControl" then
+                obj.Value=Config.Weapons.NoRecoil and 0 or original
+            end
+        end
+    end
+    scanWeapons(applyWeaponValue)
+end
+local function restoreWeaponMods()
+    Config.Weapons.NoSpread=false
+    Config.Weapons.NoRecoil=false
+    for obj in pairs(WeaponMods.Originals) do restoreWeaponValue(obj) end
+end
+if WeaponsFolder then
+    scanWeapons(applyWeaponValue)
+    table.insert(WeaponMods.Connections,bind(WeaponsFolder.DescendantAdded,function(obj)
+        if weaponValue(obj) then applyWeaponValue(obj) end
+    end))
+end
+App.ApplyWeaponMods=syncWeaponMods
+App.RestoreWeaponMods=restoreWeaponMods
+
+s=section(weaponsPage,"Gun Mods")
+local weaponStatus=label(s,WeaponsFolder and "Detected Arsenal weapon database" or "Weapon database not found",UDim2.new(1,0,0,20),nil,11,WeaponsFolder and Color3.fromRGB(88,220,150) or Color3.fromRGB(255,185,65))
+addToggle(s,"No spread",function() return Config.Weapons.NoSpread end,function(v) Config.Weapons.NoSpread=v; syncWeaponMods(); notify(v and "Spread disabled" or "Spread restored") end)
+addToggle(s,"No recoil",function() return Config.Weapons.NoRecoil end,function(v) Config.Weapons.NoRecoil=v; syncWeaponMods(); notify(v and "Recoil disabled" or "Recoil restored") end)
+
 s=section(settingsPage,"Interface")
 addKeybind(s,"Menu key",function() return Config.UI.MenuKey end,function(v) Config.UI.MenuKey=v end)
 addKeybind(s,"Panic key",function() return Config.UI.PanicKey end,function(v) Config.UI.PanicKey=v end)
@@ -293,10 +362,10 @@ local function loadProfile()
     if not encoded then notify("Profile not found: "..n); return end
     local ok,data=pcall(function() return HttpService:JSONDecode(encoded) end)
     if not ok or type(data)~="table" then notify("Invalid profile: "..n); return end
-    mergeValid(Config,data); normalize(); refreshAll(); guiScale.Scale=Config.UI.Scale/100; App.Target=nil; notify("Loaded profile: "..n)
+    mergeValid(Config,data); normalize(); refreshAll(); guiScale.Scale=Config.UI.Scale/100; App.Target=nil; syncWeaponMods(); notify("Loaded profile: "..n)
 end
 local function resetProfile()
-    for k in pairs(Config) do Config[k]=nil end; mergeValid(Config,deepCopy(Defaults)); normalize(); refreshAll(); guiScale.Scale=Config.UI.Scale/100; App.Target=nil; notify("Settings reset")
+    restoreWeaponMods(); for k in pairs(Config) do Config[k]=nil end; mergeValid(Config,deepCopy(Defaults)); normalize(); refreshAll(); guiScale.Scale=Config.UI.Scale/100; App.Target=nil; syncWeaponMods(); notify("Settings reset")
 end
 addButton(profileSection,"Save profile",saveProfile)
 addButton(profileSection,"Load profile",loadProfile)
@@ -430,6 +499,9 @@ end)
 function App:Unload()
     if not self.Alive then return end
     self.Alive=false
+    restoreWeaponMods()
+    for _,c in ipairs(WeaponMods.Connections) do pcall(function() c:Disconnect() end) end
+    WeaponMods.Connections={}
     for _,c in ipairs(self.Connections) do pcall(function() c:Disconnect() end) end
     for _,d in ipairs(self.Drawings) do removeDraw(d) end
     self.Connections={};self.Drawings={};self.ESPObjects={}
@@ -442,4 +514,4 @@ env.DrawingESP=App
 env.Aimbot=App
 env.RotatingXCrosshair=App
 notify("Feature suite loaded — RightShift opens menu")
-print("[VapeFeatureMenu] loaded ui=true resize=true profiles="..tostring(persistent).." esp=true aimbot=true crosshair=true")
+print("[VapeFeatureMenu] loaded ui=true resize=true profiles="..tostring(persistent).." esp=true aimbot=true crosshair=true weapons="..tostring(WeaponsFolder~=nil))
