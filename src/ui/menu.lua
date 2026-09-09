@@ -146,7 +146,7 @@ return function(Dax)
         lbl.Interactable=false
         lbl.Parent=row
         local function refresh() mark.Visible=get() end
-        row.Activated:Connect(function() set(not get()) markDirty() refresh() end)
+        row.MouseButton1Click:Connect(function() set(not get()) markDirty() refresh() end)
         table.insert(App.Controls,refresh)
         refresh()
         return row
@@ -229,11 +229,11 @@ return function(Dax)
         refresh()
         return btn
     end
+    local activeDropdown=nil
     local function addDropdown(page,text,getOptions,get,set)
         local wrap=Instance.new("Frame")
         wrap.BackgroundTransparency=1
         wrap.Size=UDim2.new(1,-8,0,20)
-        wrap.ClipsDescendants=false
         wrap.Parent=page
         local btn=Instance.new("TextButton")
         btn.AutoButtonColor=true
@@ -245,25 +245,43 @@ return function(Dax)
         btn.TextSize=SIZE
         btn.TextColor3=BLACK
         btn.TextXAlignment=Enum.TextXAlignment.Left
-        btn.ZIndex=3
         btn.Parent=wrap
-        local list=Instance.new("Frame")
-        list.Visible=false
-        list.BackgroundColor3=WHITE
-        list.BorderSizePixel=1
-        list.BorderColor3=BLACK
-        list.Position=UDim2.fromOffset(0,22)
-        list.Size=UDim2.new(1,0,0,0)
-        list.AutomaticSize=Enum.AutomaticSize.Y
-        list.ZIndex=10
-        list.Parent=wrap
+        local overlay=Instance.new("Frame")
+        overlay.Visible=false
+        overlay.BackgroundColor3=WHITE
+        overlay.BorderSizePixel=1
+        overlay.BorderColor3=BLACK
+        overlay.ZIndex=100
+        overlay.Parent=gui
+        local scroll=Instance.new("ScrollingFrame")
+        scroll.BackgroundTransparency=1
+        scroll.BorderSizePixel=0
+        scroll.Size=UDim2.new(1,0,1,0)
+        scroll.CanvasSize=UDim2.new()
+        scroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+        scroll.ScrollBarThickness=4
+        scroll.ScrollBarImageColor3=BLACK
+        scroll.Parent=overlay
         local listLayout=Instance.new("UIListLayout")
         listLayout.Padding=UDim.new(0,0)
-        listLayout.Parent=list
+        listLayout.Parent=scroll
         local open=false
-        local function closeList() open=false list.Visible=false end
+        local blockClose=false
+        local function closeList()
+            open=false
+            overlay.Visible=false
+            if activeDropdown==closeList then activeDropdown=nil end
+        end
+        local function positionOverlay()
+            local a=btn.AbsolutePosition
+            local s=btn.AbsoluteSize
+            local opts=getOptions()
+            local h=math.clamp(#opts*18+2,20,140)
+            overlay.Position=UDim2.fromOffset(a.X,a.Y+s.Y+2)
+            overlay.Size=UDim2.fromOffset(s.X,h)
+        end
         local function rebuildList()
-            for _,child in ipairs(list:GetChildren()) do
+            for _,child in ipairs(scroll:GetChildren()) do
                 if child:IsA("TextButton") then child:Destroy() end
             end
             for _,opt in ipairs(getOptions()) do
@@ -277,8 +295,8 @@ return function(Dax)
                 optBtn.TextColor3=BLACK
                 optBtn.TextXAlignment=Enum.TextXAlignment.Left
                 optBtn.Text="  "..tostring(opt)
-                optBtn.ZIndex=11
-                optBtn.Parent=list
+                optBtn.ZIndex=101
+                optBtn.Parent=scroll
                 optBtn.MouseButton1Click:Connect(function()
                     set(opt)
                     closeList()
@@ -289,21 +307,23 @@ return function(Dax)
         local function refresh() btn.Text="  "..text..": "..tostring(get()).."  v" end
         btn.MouseButton1Click:Connect(function()
             if open then closeList() return end
+            if activeDropdown and activeDropdown~=closeList then activeDropdown() end
             rebuildList()
+            positionOverlay()
             open=true
-            list.Visible=true
+            overlay.Visible=true
+            activeDropdown=closeList
+            blockClose=true
+            task.delay(0.15,function() blockClose=false end)
         end)
-        Dax.bind(UIS.InputBegan,function(input,processed)
-            if processed or not open or input.UserInputType~=Enum.UserInputType.MouseButton1 then return end
-            task.defer(function()
-                if not open then return end
-                local pos=input.Position
-                local function inside(guiObj)
-                    local a=guiObj.AbsolutePosition local s=guiObj.AbsoluteSize
-                    return pos.X>=a.X and pos.X<=a.X+s.X and pos.Y>=a.Y and pos.Y<=a.Y+s.Y
-                end
-                if not inside(btn) and not inside(list) then closeList() end
-            end)
+        Dax.bind(UIS.InputEnded,function(input)
+            if not open or blockClose or input.UserInputType~=Enum.UserInputType.MouseButton1 then return end
+            local pos=input.Position
+            local function inside(guiObj)
+                local a=guiObj.AbsolutePosition local sz=guiObj.AbsoluteSize
+                return pos.X>=a.X and pos.X<=a.X+sz.X and pos.Y>=a.Y and pos.Y<=a.Y+sz.Y
+            end
+            if not inside(btn) and not inside(overlay) then closeList() end
         end)
         table.insert(App.Controls,refresh)
         refresh()
