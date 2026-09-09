@@ -4,6 +4,7 @@ return function(Dax)
     local Config=Dax.Config
     local LP=Dax.LP
     local Players=Dax.Services.Players
+    local Camera=Dax.Camera
     local skeletonPairs={{"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},{"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},{"LowerTorso","LeftUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},{"LowerTorso","RightUpperLeg"},{"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"}}
     local bodyNames={"Head","UpperTorso","LowerTorso","LeftUpperArm","RightUpperArm","LeftHand","RightHand","LeftUpperLeg","RightUpperLeg","LeftFoot","RightFoot"}
     local function makeESP(player)
@@ -47,8 +48,6 @@ return function(Dax)
     end
     function Dax.Features.ESP.update(player,d)
         if not Config.ESP.Enabled then hideESP(d) return end
-        local cam=Dax.getCamera()
-        if not cam then hideESP(d) return end
         local char=player.Character
         local hum=char and char:FindFirstChildOfClass("Humanoid")
         local root=char and char:FindFirstChild("HumanoidRootPart")
@@ -57,7 +56,7 @@ return function(Dax)
         local same=LP.Team~=nil and player.Team==LP.Team
         if same and not Config.ESP.ShowTeam then hideESP(d) return end
         local _,on=Dax.project(root.Position)
-        local dist=(cam.CFrame.Position-root.Position).Magnitude
+        local dist=(Camera.CFrame.Position-root.Position).Magnitude
         if not on or dist>Config.ESP.MaxDistance then hideESP(d) return end
         local pos,size=bounds(char)
         if not pos then hideESP(d) return end
@@ -79,7 +78,7 @@ return function(Dax)
         if Config.ESP.Distance then table.insert(infos,tostring(math.floor(dist/3.571)).."m") end
         if Config.ESP.Health and not Config.ESP.Names then table.insert(infos,Dax.formatHealth(health).." HP") end
         d.Info.Text=table.concat(infos,"  •  ") d.Info.Position=Vector2.new(pos.X+size.X/2,pos.Y+size.Y+3) d.Info.Color=Color3.fromRGB(225,228,238) d.Info.Transparency=alpha d.Info.Visible=#infos>0
-        local origin=Config.ESP.TracerOrigin=="Top" and Vector2.new(cam.ViewportSize.X/2,0) or (Config.ESP.TracerOrigin=="Center" and cam.ViewportSize/2 or Vector2.new(cam.ViewportSize.X/2,cam.ViewportSize.Y-2))
+        local origin=Config.ESP.TracerOrigin=="Top" and Vector2.new(Camera.ViewportSize.X/2,0) or (Config.ESP.TracerOrigin=="Center" and Camera.ViewportSize/2 or Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y-2))
         local target=Vector2.new(pos.X+size.X/2,pos.Y+size.Y)
         d.TracerO.From=origin d.TracerO.To=target d.TracerO.Thickness=thick+2 d.TracerO.Transparency=alpha*.8 d.TracerO.Visible=Config.ESP.Tracers
         d.Tracer.From=origin d.Tracer.To=target d.Tracer.Color=color d.Tracer.Thickness=thick d.Tracer.Transparency=alpha d.Tracer.Visible=Config.ESP.Tracers

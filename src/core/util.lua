@@ -21,13 +21,8 @@ return function(Dax)
         return input.UserInputType.Name
     end
     function Dax.keyMatches(input,name) return Dax.keyName(input)==name end
-    function Dax.getCamera()
-        return game.Workspace.CurrentCamera
-    end
     function Dax.project(pos)
-        local cam=Dax.getCamera()
-        if not cam then return Vector2.zero,false end
-        local p,on=cam:WorldToViewportPoint(pos)
+        local p,on=Dax.Camera:WorldToViewportPoint(pos)
         return Vector2.new(p.X,p.Y),on and p.Z>0
     end
     function Dax.refreshAll()

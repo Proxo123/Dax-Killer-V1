@@ -1,7 +1,7 @@
 return function(Dax)
     local Config={
-        UI={MenuKey="RightShift",PanicKey="End",Scale=100,Notifications=true,Accent={125,92,255}},
-        Combat={Enabled=true,AimKey="MouseButton2",TeamCheck=true,WallCheck=true,TargetPart="Head",FOV=200,Smoothness=12,LockTarget=true,ShowFOV=true},
+        UI={MenuKey="Insert",PanicKey="End",Scale=100,Notifications=true,Accent={125,92,255}},
+        Combat={Enabled=true,AimKey="MouseButton2",TeamCheck=true,WallCheck=true,TargetPart="Head",FOV=200,Smoothness=12,LockTarget=true,ShowFOV=true,RedirectEnabled=true,RedirectTeamCheck=true,RedirectMaxDist=600},
         ESP={Enabled=true,Boxes=true,Skeletons=true,Tracers=true,Names=true,Distance=true,Health=true,ShowTeam=true,MaxDistance=2500,Thickness=1,Opacity=95,TracerOrigin="Bottom",EnemyColor={255,74,92},TeamColor={70,180,255}},
         Crosshair={Enabled=true,Color={255,255,255},Gap=5,ArmLength=15,BendLength=9,Thickness=2,Speed=120,Direction="Clockwise",CenterDot=false},
         Weapons={NoSpread=false,NoRecoil=false}
@@ -28,6 +28,7 @@ return function(Dax)
         Config.UI.Scale=math.clamp(Config.UI.Scale,75,130)
         Config.Combat.FOV=math.clamp(Config.Combat.FOV,30,600)
         Config.Combat.Smoothness=math.clamp(Config.Combat.Smoothness,0,100)
+        Config.Combat.RedirectMaxDist=math.clamp(Config.Combat.RedirectMaxDist,50,2000)
         Config.ESP.MaxDistance=math.clamp(Config.ESP.MaxDistance,100,5000)
         Config.ESP.Thickness=math.clamp(Config.ESP.Thickness,1,4)
         Config.ESP.Opacity=math.clamp(Config.ESP.Opacity,20,100)
