@@ -1,4 +1,4 @@
-local VERSION="94b4dc6"
+local VERSION="bf1e323"
 local REPO="https://raw.githubusercontent.com/Proxo123/Dax-Killer-V1/"..VERSION.."/src/"
 local ORDER={
     "core/bootstrap.lua",
