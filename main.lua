@@ -341,37 +341,162 @@ addColor(s,"Accent color",function() return Config.UI.Accent end,function(v) Con
 addButton(s,"Unload everything",function() App:Unload() end,true)
 
 local profileSection=section(profilePage,"Profiles")
-local profileName=inst("TextBox",{ClearTextOnFocus=false,PlaceholderText="Profile name",Text="default",Font=Enum.Font.GothamMedium,TextSize=12,TextColor3=Color3.new(1,1,1),PlaceholderColor3=Color3.fromRGB(115,118,130),BackgroundColor3=Color3.fromRGB(29,30,37),Size=UDim2.new(1,0,0,38)},profileSection); round(profileName,7); pad(profileName,11,11,0,0)
 local persistenceLabel=label(profileSection,"Persistent JSON storage: available",UDim2.new(1,0,0,24),nil,11,Color3.fromRGB(88,220,150))
+label(profileSection,"Settings auto-save when you leave the game",UDim2.new(1,0,0,20),nil,11,Color3.fromRGB(130,133,146))
 
 local folder="SolVapeProfiles"
+local AUTOSAVE_NAME="_autosave"
+local META_FILE="_meta.json"
 local persistent=type(writefile)=="function" and type(readfile)=="function"
 if persistent and type(makefolder)=="function" then pcall(function() if type(isfolder)~="function" or not isfolder(folder) then makefolder(folder) end end) end
 if not persistent then persistenceLabel.Text="Persistent JSON storage unavailable — session only"; persistenceLabel.TextColor3=Color3.fromRGB(255,185,65) end
 local memoryProfiles={}
-local function safeName() local n=profileName.Text:gsub("[^%w_%-]",""):sub(1,32); if n=="" then n="default" end; profileName.Text=n; App.Profile=n; return n end
+local savedProfiles={"default"}
+App.Profile="default"
 local function profilePath(n) return folder.."/"..n..".json" end
-local function saveProfile()
-    normalize(); local n=safeName(); local encoded=HttpService:JSONEncode(Config); memoryProfiles[n]=encoded
-    if persistent then local ok,err=pcall(function() writefile(profilePath(n),encoded) end); if not ok then notify("Save failed: "..tostring(err)); return end end
-    notify("Saved profile: "..n)
+local function sanitizeName(n) n=tostring(n or ""):gsub("[^%w_%-]",""):sub(1,32); return n=="" and "default" or n end
+local function listSavedProfiles()
+    local names={}
+    local seen={}
+    if persistent and type(listfiles)=="function" then
+        local ok,files=pcall(function() return listfiles(folder) end)
+        if ok and type(files)=="table" then
+            for _,file in ipairs(files) do
+                local name=file:match("^(.+)%.json$")
+                if name and name~="_autosave" and name~="_meta" and not seen[name] then seen[name]=true; table.insert(names,name) end
+            end
+        end
+    end
+    for name in pairs(memoryProfiles) do
+        if name~="_autosave" and name~="_meta" and not seen[name] then seen[name]=true; table.insert(names,name) end
+    end
+    table.sort(names)
+    if #names==0 then table.insert(names,"default") end
+    savedProfiles=names
+    if not table.find(savedProfiles,App.Profile) then App.Profile=savedProfiles[1] end
+    return savedProfiles
 end
-local function loadProfile()
-    local n=safeName(); local encoded=memoryProfiles[n]
-    if persistent then local ok,data=pcall(function() return readfile(profilePath(n)) end); if ok then encoded=data end end
-    if not encoded then notify("Profile not found: "..n); return end
+local function readProfileEncoded(name)
+    local encoded=memoryProfiles[name]
+    if persistent and not encoded then
+        local ok,data=pcall(function() return readfile(profilePath(name)) end)
+        if ok then encoded=data end
+    end
+    return encoded
+end
+local function writeProfileEncoded(name,encoded)
+    name=sanitizeName(name)
+    memoryProfiles[name]=encoded
+    if persistent then
+        local ok,err=pcall(function() writefile(profilePath(name),encoded) end)
+        if not ok then return false,err end
+    end
+    return true
+end
+local function writeMeta()
+    if not persistent then return end
+    pcall(function() writefile(folder.."/"..META_FILE,HttpService:JSONEncode({LastProfile=App.Profile,Profiles=listSavedProfiles()})) end)
+end
+local function applyConfig(data,profileName)
+    if type(data)~="table" then return false end
+    mergeValid(Config,data); normalize(); App.Profile=sanitizeName(profileName or App.Profile); listSavedProfiles(); refreshAll()
+    if guiScale then guiScale.Scale=Config.UI.Scale/100 end
+    App.Target=nil; syncWeaponMods(); writeMeta(); return true
+end
+local function saveAutosave()
+    normalize()
+    local encoded=HttpService:JSONEncode(Config)
+    memoryProfiles[AUTOSAVE_NAME]=encoded
+    if persistent then pcall(function() writefile(profilePath(AUTOSAVE_NAME),encoded) end); writeMeta() end
+end
+App.SaveAutosave=saveAutosave
+local function saveProfile()
+    normalize(); local n=sanitizeName(App.Profile); local ok,err=writeProfileEncoded(n,HttpService:JSONEncode(Config))
+    if not ok then notify("Save failed: "..tostring(err)); return end
+    listSavedProfiles(); writeMeta(); refreshProfilePicker(); notify("Saved profile: "..n)
+end
+local function loadProfileByName(name)
+    name=sanitizeName(name); local encoded=readProfileEncoded(name)
+    if not encoded then notify("Profile not found: "..name); return false end
     local ok,data=pcall(function() return HttpService:JSONDecode(encoded) end)
-    if not ok or type(data)~="table" then notify("Invalid profile: "..n); return end
-    mergeValid(Config,data); normalize(); refreshAll(); guiScale.Scale=Config.UI.Scale/100; App.Target=nil; syncWeaponMods(); notify("Loaded profile: "..n)
+    if not ok or not applyConfig(data,name) then notify("Invalid profile: "..name); return false end
+    refreshProfilePicker(); notify("Loaded profile: "..name); return true
+end
+local function loadProfile() return loadProfileByName(App.Profile) end
+local function loadAutosaveOrLast()
+    listSavedProfiles()
+    local encoded=readProfileEncoded(AUTOSAVE_NAME)
+    if persistent then
+        local ok,metaData=pcall(function() return readfile(folder.."/"..META_FILE) end)
+        if ok and metaData then
+            local okMeta,meta=pcall(function() return HttpService:JSONDecode(metaData) end)
+            if okMeta and type(meta)=="table" and meta.LastProfile then App.Profile=sanitizeName(meta.LastProfile) end
+        end
+    end
+    if encoded then
+        local ok,data=pcall(function() return HttpService:JSONDecode(encoded) end)
+        if ok and applyConfig(data,App.Profile) then return true end
+    end
+    if App.Profile~="default" then
+        encoded=readProfileEncoded(App.Profile)
+        if encoded then
+            local ok,data=pcall(function() return HttpService:JSONDecode(encoded) end)
+            if ok and applyConfig(data,App.Profile) then return true end
+        end
+    end
+    return false
 end
 local function resetProfile()
-    restoreWeaponMods(); for k in pairs(Config) do Config[k]=nil end; mergeValid(Config,deepCopy(Defaults)); normalize(); refreshAll(); guiScale.Scale=Config.UI.Scale/100; App.Target=nil; syncWeaponMods(); notify("Settings reset")
+    restoreWeaponMods(); for k in pairs(Config) do Config[k]=nil end; mergeValid(Config,deepCopy(Defaults)); normalize(); refreshAll()
+    if guiScale then guiScale.Scale=Config.UI.Scale/100 end
+    App.Target=nil; syncWeaponMods(); saveAutosave(); notify("Settings reset")
 end
-addButton(profileSection,"Save profile",saveProfile)
-addButton(profileSection,"Load profile",loadProfile)
+local function createProfile()
+    local base="Profile"
+    local n=1
+    while table.find(savedProfiles,base..n) do n+=1 end
+    App.Profile=base..n
+    listSavedProfiles()
+    refreshProfilePicker()
+    saveProfile()
+end
+local profilePicker
+local function refreshProfilePicker()
+    listSavedProfiles()
+    if profilePicker and profilePicker.Refresh then profilePicker.Refresh() end
+end
+local function addProfilePicker(parentObj,text,get,set)
+    local r=row(parentObj,38); round(r,7); label(r,text,UDim2.new(.55,-11,1,0),UDim2.new(0,11,0,0),12)
+    local b=inst("TextButton",{AutoButtonColor=false,BackgroundColor3=Color3.fromRGB(38,40,49),Size=UDim2.new(.42,0,0,26),Position=UDim2.new(.56,0,.5,-13),Font=Enum.Font.GothamSemibold,TextSize=11,TextColor3=c3(Config.UI.Accent)},r); round(b,6)
+    local function refresh()
+        listSavedProfiles()
+        local current=sanitizeName(get())
+        if not table.find(savedProfiles,current) then current=savedProfiles[1]; set(current) end
+        b.Text=current.."  ›"
+    end
+    profilePicker={Refresh=refresh,Button=b}
+    table.insert(App.Controls,refresh)
+    bind(b.MouseButton1Click,function()
+        listSavedProfiles()
+        local options=savedProfiles
+        local current=sanitizeName(get())
+        local idx=table.find(options,current) or 0
+        local nextName=options[idx%#options+1]
+        set(nextName)
+        loadProfileByName(nextName)
+        refresh()
+    end)
+    refresh()
+    return r
+end
+addProfilePicker(profileSection,"Saved profile",function() return App.Profile end,function(v) App.Profile=sanitizeName(v) end)
+addButton(profileSection,"Save current profile",saveProfile)
+addButton(profileSection,"Create new profile",createProfile)
 addButton(profileSection,"Reset defaults",resetProfile,true)
 
 guiScale=inst("UIScale",{Scale=Config.UI.Scale/100},window)
+local restoredFrom=loadAutosaveOrLast()
+refreshProfilePicker()
 showTab("Combat")
 
 local skeletonPairs={{"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},{"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},{"LowerTorso","LeftUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},{"LowerTorso","RightUpperLeg"},{"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"}}
@@ -498,6 +623,7 @@ end)
 
 function App:Unload()
     if not self.Alive then return end
+    saveAutosave()
     self.Alive=false
     restoreWeaponMods()
     for _,c in ipairs(WeaponMods.Connections) do pcall(function() c:Disconnect() end) end
@@ -513,5 +639,6 @@ env.VapeFeatureMenu=App
 env.DrawingESP=App
 env.Aimbot=App
 env.RotatingXCrosshair=App
-notify("Feature suite loaded — RightShift opens menu")
-print("[VapeFeatureMenu] loaded ui=true resize=true profiles="..tostring(persistent).." esp=true aimbot=true crosshair=true weapons="..tostring(WeaponsFolder~=nil))
+if game.BindToClose then pcall(function() game:BindToClose(function() saveAutosave() end) end) end
+notify(restoredFrom and "Restored saved settings" or "Feature suite loaded — RightShift opens menu")
+print("[VapeFeatureMenu] loaded ui=true resize=true profiles="..tostring(persistent).." restored="..tostring(restoredFrom).." esp=true aimbot=true crosshair=true weapons="..tostring(WeaponsFolder~=nil))
