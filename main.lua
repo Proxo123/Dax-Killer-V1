@@ -516,6 +516,30 @@ local function destroyESP(player)
 end
 local function project(pos) local p,on=Camera:WorldToViewportPoint(pos); return Vector2.new(p.X,p.Y),on and p.Z>0 end
 local bodyNames={"Head","UpperTorso","LowerTorso","LeftUpperArm","RightUpperArm","LeftHand","RightHand","LeftUpperLeg","RightUpperLeg","LeftFoot","RightFoot"}
+local function getPlayerHealth(player,hum)
+    local nrpbs=player:FindFirstChild("NRPBS")
+    local health=nrpbs and nrpbs:FindFirstChild("Health")
+    local maxHealth=nrpbs and nrpbs:FindFirstChild("MaxHealth")
+    if health and health:IsA("ValueBase") then
+        local max=maxHealth and maxHealth:IsA("ValueBase") and maxHealth.Value or 100
+        return health.Value,max
+    end
+    if hum then return hum.Health,hum.MaxHealth end
+    return 0,100
+end
+local function isPlayerAlive(player)
+    local ch=player.Character
+    local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+    local root=ch and ch:FindFirstChild("HumanoidRootPart")
+    if not ch or not root then return false end
+    local health,maxHealth=getPlayerHealth(player,hum)
+    if health<=0 then return false end
+    if ch:GetAttribute("DIED")==true or player:GetAttribute("DIED")==true then return false end
+    if root.Position.Y<-100 then return false end
+    local localRoot=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    if localRoot and root.Position.Y<localRoot.Position.Y-120 then return false end
+    return true
+end
 local function bounds(char)
     local pts={}; for _,n in ipairs(bodyNames) do local part=char:FindFirstChild(n); if part then local p,on=project(part.Position); if on then table.insert(pts,p) end end end
     if #pts<5 then return end
@@ -527,7 +551,8 @@ end
 local function updateESP(player,d)
     if not Config.ESP.Enabled then hideESP(d); return end
     local char=player.Character; local hum=char and char:FindFirstChildOfClass("Humanoid"); local root=char and char:FindFirstChild("HumanoidRootPart")
-    if not char or not hum or not root or hum.Health<=0 then hideESP(d); return end
+    if not isPlayerAlive(player) then hideESP(d); return end
+    local health,maxHealth=getPlayerHealth(player,hum)
     local same=LP.Team~=nil and player.Team==LP.Team
     if same and not Config.ESP.ShowTeam then hideESP(d); return end
     local rp,on=project(root.Position); local dist=(Camera.CFrame.Position-root.Position).Magnitude
@@ -536,11 +561,11 @@ local function updateESP(player,d)
     local color=c3(same and Config.ESP.TeamColor or Config.ESP.EnemyColor); local alpha=Config.ESP.Opacity/100; local thick=Config.ESP.Thickness
     d.BoxO.Position=pos;d.BoxO.Size=size;d.BoxO.Thickness=thick+2;d.BoxO.Transparency=alpha*.85;d.BoxO.Visible=Config.ESP.Boxes
     d.Box.Position=pos;d.Box.Size=size;d.Box.Color=color;d.Box.Thickness=thick;d.Box.Transparency=alpha;d.Box.Visible=Config.ESP.Boxes
-    local ratio=math.clamp(hum.Health/math.max(hum.MaxHealth,1),0,1); local bx=pos.X-7
+    local ratio=math.clamp(health/math.max(maxHealth,1),0,1); local bx=pos.X-7
     d.HealthO.Position=Vector2.new(bx-1,pos.Y-1);d.HealthO.Size=Vector2.new(5,size.Y+2);d.HealthO.Transparency=alpha*.85;d.HealthO.Visible=Config.ESP.Health
     d.Health.Position=Vector2.new(bx,pos.Y+size.Y*(1-ratio));d.Health.Size=Vector2.new(3,math.max(1,size.Y*ratio));d.Health.Color=Color3.fromRGB(255*(1-ratio),255*ratio,70);d.Health.Transparency=alpha;d.Health.Visible=Config.ESP.Health
     d.Name.Text=player.DisplayName..(player.Team and "  ["..player.Team.Name.."]" or "");d.Name.Position=Vector2.new(pos.X+size.X/2,pos.Y-17);d.Name.Color=color;d.Name.Transparency=alpha;d.Name.Visible=Config.ESP.Names
-    local infos={}; if Config.ESP.Distance then table.insert(infos,tostring(math.floor(dist/3.571)).."m") end; if Config.ESP.Health then table.insert(infos,tostring(math.floor(hum.Health+.5)).." HP") end
+    local infos={}; if Config.ESP.Distance then table.insert(infos,tostring(math.floor(dist/3.571)).."m") end; if Config.ESP.Health then table.insert(infos,tostring(math.floor(health+.5)).." HP") end
     d.Info.Text=table.concat(infos,"  •  ");d.Info.Position=Vector2.new(pos.X+size.X/2,pos.Y+size.Y+3);d.Info.Color=Color3.fromRGB(225,228,238);d.Info.Transparency=alpha;d.Info.Visible=#infos>0
     local origin=Config.ESP.TracerOrigin=="Top" and Vector2.new(Camera.ViewportSize.X/2,0) or (Config.ESP.TracerOrigin=="Center" and Camera.ViewportSize/2 or Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y-2)); local target=Vector2.new(pos.X+size.X/2,pos.Y+size.Y)
     d.TracerO.From=origin;d.TracerO.To=target;d.TracerO.Thickness=thick+2;d.TracerO.Transparency=alpha*.8;d.TracerO.Visible=Config.ESP.Tracers
@@ -561,15 +586,7 @@ cross.DotO=draw("Circle",{Visible=false,Filled=true,Color=Color3.new(),Radius=3,
 local function validEnemy(p)
     if p==LP then return false end
     if Config.Combat.TeamCheck and LP.Team and p.Team==LP.Team then return false end
-    local ch=p.Character
-    local h=ch and ch:FindFirstChildOfClass("Humanoid")
-    local root=ch and ch:FindFirstChild("HumanoidRootPart")
-    if not ch or not h or not root or h.Health<=0 then return false end
-    if ch:GetAttribute("DIED")==true or p:GetAttribute("DIED")==true then return false end
-    if root.Position.Y < -100 then return false end
-    local localRoot=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    if localRoot and root.Position.Y < localRoot.Position.Y-120 then return false end
-    return true
+    return isPlayerAlive(p)
 end
 local function visibleTo(p,part)
     if not Config.Combat.WallCheck then return true end
@@ -607,9 +624,18 @@ bind(RunService.RenderStepped,function(dt)
 
     local mouse=UIS:GetMouseLocation();fovCircle.Position=mouse;fovCircle.Radius=Config.Combat.FOV;fovCircle.Color=c3(Config.UI.Accent);fovCircle.Visible=Config.Combat.Enabled and Config.Combat.ShowFOV
     if Config.Combat.Enabled and App.Aiming then
-        if not Config.Combat.LockTarget or not App.Target or not validEnemy(App.Target) then App.Target=acquire() end
+        if App.Target and not validEnemy(App.Target) then App.Target=nil end
+        if not App.Target or not Config.Combat.LockTarget then App.Target=acquire() end
         local part=App.Target and App.Target.Character and App.Target.Character:FindFirstChild(Config.Combat.TargetPart)
-        if part and visibleTo(App.Target,part) then local goal=CFrame.lookAt(Camera.CFrame.Position,part.Position);local smooth=Config.Combat.Smoothness/100;Camera.CFrame=smooth<=0 and goal or Camera.CFrame:Lerp(goal,1-math.pow(1-math.clamp(smooth,.01,.95),dt*60)) else App.Target=nil end
+        if App.Target and part and validEnemy(App.Target) and visibleTo(App.Target,part) then
+            local goal=CFrame.lookAt(Camera.CFrame.Position,part.Position)
+            local smooth=Config.Combat.Smoothness/100
+            Camera.CFrame=smooth<=0 and goal or Camera.CFrame:Lerp(goal,1-math.pow(1-math.clamp(smooth,.01,.95),dt*60))
+        else
+            App.Target=nil
+        end
+    elseif App.Target then
+        App.Target=nil
     end
 
     local enabled=Config.Crosshair.Enabled;local col=c3(Config.Crosshair.Color);local center=Camera.ViewportSize/2;local sign=Config.Crosshair.Direction=="Clockwise" and 1 or -1
