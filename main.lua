@@ -14,7 +14,7 @@ for _,name in ipairs({"VapeFeatureMenu","DrawingESP","Aimbot","RotatingXCrosshai
     if old and type(old.Unload)=="function" then pcall(function() old:Unload() end) end
 end
 
-local App={Connections={},Drawings={},ESPObjects={},Controls={},Alive=true,Aiming=false,Target=nil,Profile="default"}
+local App={Connections={},Drawings={},ESPObjects={},HealthRefs={},Controls={},Alive=true,Aiming=false,Target=nil,Profile="default"}
 local Config={
     UI={MenuKey="RightShift",PanicKey="End",Scale=100,Notifications=true,Accent={125,92,255}},
     Combat={Enabled=true,AimKey="MouseButton2",TeamCheck=true,WallCheck=true,TargetPart="Head",FOV=200,Smoothness=12,LockTarget=true,ShowFOV=true},
@@ -516,16 +516,40 @@ local function destroyESP(player)
 end
 local function project(pos) local p,on=Camera:WorldToViewportPoint(pos); return Vector2.new(p.X,p.Y),on and p.Z>0 end
 local bodyNames={"Head","UpperTorso","LowerTorso","LeftUpperArm","RightUpperArm","LeftHand","RightHand","LeftUpperLeg","RightUpperLeg","LeftFoot","RightFoot"}
+local function trackPlayerHealth(player)
+    if player==LP or App.HealthRefs[player] then return end
+    local function bindNrpbs(nrpbs)
+        if not nrpbs or App.HealthRefs[player] then return end
+        task.spawn(function()
+            local health=nrpbs:WaitForChild("Health",5)
+            if not health or not health:IsA("ValueBase") or App.HealthRefs[player] then return end
+            local maxHealth=nrpbs:FindFirstChild("MaxHealth") or nrpbs:FindFirstChild("OMaxHealth")
+            App.HealthRefs[player]={Health=health,MaxHealth=maxHealth}
+        end)
+    end
+    if player:FindFirstChild("NRPBS") then bindNrpbs(player.NRPBS) end
+    bind(player.ChildAdded,function(child) if child.Name=="NRPBS" then bindNrpbs(child) end end)
+end
 local function getPlayerHealth(player,hum)
+    local refs=App.HealthRefs[player]
+    if not refs then trackPlayerHealth(player); refs=App.HealthRefs[player] end
+    if refs and refs.Health and refs.Health.Parent then
+        local max=100
+        if refs.MaxHealth and refs.MaxHealth:IsA("ValueBase") then max=refs.MaxHealth.Value end
+        return refs.Health.Value,math.max(max,1)
+    end
     local nrpbs=player:FindFirstChild("NRPBS")
     local health=nrpbs and nrpbs:FindFirstChild("Health")
-    local maxHealth=nrpbs and nrpbs:FindFirstChild("MaxHealth")
+    local maxHealth=nrpbs and (nrpbs:FindFirstChild("MaxHealth") or nrpbs:FindFirstChild("OMaxHealth"))
     if health and health:IsA("ValueBase") then
         local max=maxHealth and maxHealth:IsA("ValueBase") and maxHealth.Value or 100
-        return health.Value,max
+        return health.Value,math.max(max,1)
     end
-    if hum then return hum.Health,hum.MaxHealth end
+    if hum then return hum.Health,math.max(hum.MaxHealth,1) end
     return 0,100
+end
+local function formatHealth(health)
+    return tostring(math.max(0,math.floor(health+.5)))
 end
 local function isPlayerAlive(player)
     local ch=player.Character
@@ -561,11 +585,18 @@ local function updateESP(player,d)
     local color=c3(same and Config.ESP.TeamColor or Config.ESP.EnemyColor); local alpha=Config.ESP.Opacity/100; local thick=Config.ESP.Thickness
     d.BoxO.Position=pos;d.BoxO.Size=size;d.BoxO.Thickness=thick+2;d.BoxO.Transparency=alpha*.85;d.BoxO.Visible=Config.ESP.Boxes
     d.Box.Position=pos;d.Box.Size=size;d.Box.Color=color;d.Box.Thickness=thick;d.Box.Transparency=alpha;d.Box.Visible=Config.ESP.Boxes
-    local ratio=math.clamp(health/math.max(maxHealth,1),0,1); local bx=pos.X-7
-    d.HealthO.Position=Vector2.new(bx-1,pos.Y-1);d.HealthO.Size=Vector2.new(5,size.Y+2);d.HealthO.Transparency=alpha*.85;d.HealthO.Visible=Config.ESP.Health
-    d.Health.Position=Vector2.new(bx,pos.Y+size.Y*(1-ratio));d.Health.Size=Vector2.new(3,math.max(1,size.Y*ratio));d.Health.Color=Color3.fromRGB(255*(1-ratio),255*ratio,70);d.Health.Transparency=alpha;d.Health.Visible=Config.ESP.Health
-    d.Name.Text=player.DisplayName..(player.Team and "  ["..player.Team.Name.."]" or "");d.Name.Position=Vector2.new(pos.X+size.X/2,pos.Y-17);d.Name.Color=color;d.Name.Transparency=alpha;d.Name.Visible=Config.ESP.Names
-    local infos={}; if Config.ESP.Distance then table.insert(infos,tostring(math.floor(dist/3.571)).."m") end; if Config.ESP.Health then table.insert(infos,tostring(math.floor(health+.5)).." HP") end
+    local displayHealth=math.max(0,health)
+    local ratio=math.clamp(displayHealth/math.max(maxHealth,1),0,1)
+    local bx=pos.X-8
+    d.HealthO.Position=Vector2.new(bx-1,pos.Y-1);d.HealthO.Size=Vector2.new(6,size.Y+2);d.HealthO.Transparency=alpha*.85;d.HealthO.Visible=Config.ESP.Health
+    d.Health.Position=Vector2.new(bx,pos.Y+size.Y*(1-ratio));d.Health.Size=Vector2.new(4,math.max(2,size.Y*ratio));d.Health.Color=Color3.fromRGB(255*(1-ratio),255*ratio,70);d.Health.Transparency=alpha;d.Health.Visible=Config.ESP.Health
+    local nameText=player.DisplayName
+    if player.Team then nameText=nameText.."  ["..player.Team.Name.."]" end
+    if Config.ESP.Health then nameText=nameText.."  "..formatHealth(health).." HP" end
+    d.Name.Text=nameText;d.Name.Position=Vector2.new(pos.X+size.X/2,pos.Y-17);d.Name.Color=color;d.Name.Transparency=alpha;d.Name.Visible=Config.ESP.Names or Config.ESP.Health
+    local infos={}
+    if Config.ESP.Distance then table.insert(infos,tostring(math.floor(dist/3.571)).."m") end
+    if Config.ESP.Health and not Config.ESP.Names then table.insert(infos,formatHealth(health).." HP") end
     d.Info.Text=table.concat(infos,"  •  ");d.Info.Position=Vector2.new(pos.X+size.X/2,pos.Y+size.Y+3);d.Info.Color=Color3.fromRGB(225,228,238);d.Info.Transparency=alpha;d.Info.Visible=#infos>0
     local origin=Config.ESP.TracerOrigin=="Top" and Vector2.new(Camera.ViewportSize.X/2,0) or (Config.ESP.TracerOrigin=="Center" and Camera.ViewportSize/2 or Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y-2)); local target=Vector2.new(pos.X+size.X/2,pos.Y+size.Y)
     d.TracerO.From=origin;d.TracerO.To=target;d.TracerO.Thickness=thick+2;d.TracerO.Transparency=alpha*.8;d.TracerO.Visible=Config.ESP.Tracers
@@ -575,8 +606,9 @@ local function updateESP(player,d)
         if Config.ESP.Skeletons and a and b then local pa,oa=project(a.Position);local pb,ob=project(b.Position); if oa and ob then seg.O.From=pa;seg.O.To=pb;seg.O.Thickness=thick+2;seg.O.Transparency=alpha*.8;seg.O.Visible=true;seg.L.From=pa;seg.L.To=pb;seg.L.Color=color;seg.L.Thickness=thick;seg.L.Transparency=alpha;seg.L.Visible=true else seg.O.Visible=false;seg.L.Visible=false end else seg.O.Visible=false;seg.L.Visible=false end
     end
 end
-for _,p in ipairs(Players:GetPlayers()) do makeESP(p) end
-bind(Players.PlayerAdded,makeESP);bind(Players.PlayerRemoving,destroyESP)
+for _,p in ipairs(Players:GetPlayers()) do trackPlayerHealth(p); makeESP(p) end
+bind(Players.PlayerAdded,function(p) trackPlayerHealth(p); makeESP(p) end)
+bind(Players.PlayerRemoving,function(p) destroyESP(p); App.HealthRefs[p]=nil end)
 
 local fovCircle=draw("Circle",{Visible=false,Filled=false,Color=c3(Config.UI.Accent),Thickness=1,Transparency=.8,NumSides=64,Radius=Config.Combat.FOV})
 local cross={Angle=0,Arms={},AO={},Bends={},BO={}}
@@ -656,7 +688,7 @@ function App:Unload()
     WeaponMods.Connections={}
     for _,c in ipairs(self.Connections) do pcall(function() c:Disconnect() end) end
     for _,d in ipairs(self.Drawings) do removeDraw(d) end
-    self.Connections={};self.Drawings={};self.ESPObjects={}
+    self.Connections={};self.Drawings={};self.ESPObjects={};self.HealthRefs={}
     pcall(function() self.Gui:Destroy() end)
     env.VapeFeatureMenu=nil;env.DrawingESP=nil;env.Aimbot=nil;env.RotatingXCrosshair=nil
 end
