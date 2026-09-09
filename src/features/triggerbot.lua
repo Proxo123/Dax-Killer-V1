@@ -1,4 +1,5 @@
 return function(Dax)
+    Dax.Features.Triggerbot={}
     local App=Dax.App
     local Config=Dax.Config
     local LP=Dax.LP

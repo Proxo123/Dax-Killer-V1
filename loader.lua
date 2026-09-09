@@ -15,7 +15,7 @@ local ORDER={
     "init.lua",
 }
 local function loadModule(path)
-    local source=game:HttpGet(REPO..path)
+    local source=game:HttpGet(REPO..path.."?v="..tostring(os.time()))
     local chunk,err=loadstring(source,"@"..path)
     if not chunk then error("[DaxKiller] compile failed "..path..": "..tostring(err)) end
     return chunk()

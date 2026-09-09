@@ -19,11 +19,14 @@ return function(Dax)
     end)
     Dax.bind(RunService.RenderStepped,function(dt)
         if not App.Alive then return end
-        Dax.Camera=Workspace.CurrentCamera or Dax.Camera
-        for p,d in pairs(App.ESPObjects) do Dax.Features.ESP.update(p,d) end
-        Dax.Features.Aimbot.update(dt)
-        Dax.Features.Triggerbot.update()
-        Dax.Features.Crosshair.update(dt)
+        local ok,err=pcall(function()
+            Dax.Camera=Workspace.CurrentCamera or Dax.Camera
+            for p,d in pairs(App.ESPObjects) do Dax.Features.ESP.update(p,d) end
+            if Dax.Features.Aimbot and Dax.Features.Aimbot.update then Dax.Features.Aimbot.update(dt) end
+            if Dax.Features.Triggerbot and Dax.Features.Triggerbot.update then Dax.Features.Triggerbot.update() end
+            if Dax.Features.Crosshair and Dax.Features.Crosshair.update then Dax.Features.Crosshair.update(dt) end
+        end)
+        if not ok and not App.RenderErr then App.RenderErr=true warn("[DaxKiller] "..tostring(err)) end
     end)
     function App:Unload()
         if not self.Alive then return end

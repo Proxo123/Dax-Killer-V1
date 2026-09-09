@@ -76,10 +76,12 @@ return function(Dax)
         page.BackgroundTransparency=1
         page.BorderSizePixel=0
         page.Size=UDim2.new(1,0,1,0)
+        page.Active=true
         page.ScrollBarThickness=6
         page.ScrollBarImageColor3=BLACK
         page.CanvasSize=UDim2.new()
         page.AutomaticCanvasSize=Enum.AutomaticSize.Y
+        page.ScrollingDirection=Enum.ScrollingDirection.Y
         page.Parent=body
         local list=Instance.new("UIListLayout")
         list.Padding=UDim.new(0,2)
@@ -103,6 +105,7 @@ return function(Dax)
         lbl.TextColor3=BLACK
         lbl.TextXAlignment=Enum.TextXAlignment.Left
         lbl.Text=text
+        lbl.Interactable=false
         lbl.Parent=page
         return lbl
     end
@@ -112,6 +115,7 @@ return function(Dax)
         row.BackgroundTransparency=1
         row.Size=UDim2.new(1,-8,0,18)
         row.Text=""
+        row.ZIndex=2
         row.Parent=page
         local box=Instance.new("Frame")
         box.BackgroundColor3=WHITE
@@ -138,9 +142,10 @@ return function(Dax)
         lbl.TextColor3=BLACK
         lbl.TextXAlignment=Enum.TextXAlignment.Left
         lbl.Text=text
+        lbl.Interactable=false
         lbl.Parent=row
         local function refresh() mark.Visible=get() end
-        row.MouseButton1Click:Connect(function() set(not get()) refresh() end)
+        row.Activated:Connect(function() set(not get()) refresh() end)
         table.insert(App.Controls,refresh)
         refresh()
         return row
@@ -157,6 +162,7 @@ return function(Dax)
         lbl.TextSize=SIZE
         lbl.TextColor3=BLACK
         lbl.TextXAlignment=Enum.TextXAlignment.Left
+        lbl.Interactable=false
         lbl.Parent=wrap
         local track=Instance.new("TextButton")
         track.AutoButtonColor=false
@@ -315,6 +321,7 @@ return function(Dax)
     end
     function Dax.UI.applyTheme() Dax.refreshAll() end
     Dax.UI.Window=root
-    Dax.RestoredFrom=Dax.loadAutosaveOrLast()
+    local ok,err=pcall(function() Dax.RestoredFrom=Dax.loadAutosaveOrLast() end)
+    if not ok then warn("[DaxKiller] profile load failed: "..tostring(err)) end
     Dax.refreshAll()
 end

@@ -25,6 +25,8 @@ return function(Dax)
     end
     function Dax.normalize()
         local Config=Dax.Config
+        if Config.Combat.Triggerbot==nil then Config.Combat.Triggerbot=false end
+        if Config.Combat.TriggerDelay==nil then Config.Combat.TriggerDelay=0.08 end
         Config.UI.Scale=math.clamp(Config.UI.Scale,75,130)
         Config.Combat.FOV=math.clamp(Config.Combat.FOV,30,600)
         Config.Combat.Smoothness=math.clamp(Config.Combat.Smoothness,0,100)

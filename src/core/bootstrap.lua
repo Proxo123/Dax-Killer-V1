@@ -25,6 +25,7 @@ return function(Dax)
     gui.ResetOnSpawn=false
     gui.IgnoreGuiInset=true
     gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+    gui.DisplayOrder=1000
     gui.Parent=parent
     Dax.App.Gui=gui
     Dax.UI.Gui=gui
