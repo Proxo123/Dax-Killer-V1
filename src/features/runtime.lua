@@ -43,22 +43,38 @@ return function(Dax)
     Dax.bind(UIS.InputEnded,function(input)
         if Dax.keyMatches(input,Config.Combat.AimKey) then App.Aiming=false App.Target=nil end
     end)
-    Dax.bind(RunService.RenderStepped,function(dt)
+    local RENDER_STEP="DaxKiller_Frame"
+    local function onFrame(dt)
         if not App.Alive then return end
-        Dax.Camera=Workspace.CurrentCamera or Dax.Camera
+        Dax.Camera=Workspace.CurrentCamera
+        if not Dax.Camera then return end
         for p,d in pairs(App.ESPObjects) do Dax.Features.ESP.update(p,d) end
         Dax.Features.Aimbot.update(dt)
         Dax.Features.Crosshair.update(dt)
+    end
+    if RunService.PreRender then
+        Dax.bind(RunService.PreRender,onFrame)
+    else
+        App.UsesRenderStep=true
+        App.RenderStepName=RENDER_STEP
+        RunService:BindToRenderStep(RENDER_STEP,Enum.RenderPriority.Camera.Value+1,onFrame)
+    end
+    Dax.bind(Workspace:GetPropertyChangedSignal("CurrentCamera"),function()
+        Dax.Camera=Workspace.CurrentCamera
     end)
     function App:Unload()
         if not self.Alive then return end
         Dax.saveAutosave()
         self.Alive=false
+        if Dax.Features.Redirect and Dax.Features.Redirect.unhook then Dax.Features.Redirect.unhook() end
         if Dax.Features.Weapons and Dax.Features.Weapons.restore then Dax.Features.Weapons.restore() end
         local mods=Dax.Features.Weapons and Dax.Features.Weapons.Mods
         if mods then
             for _,c in ipairs(mods.Connections) do pcall(function() c:Disconnect() end) end
             mods.Connections={}
+        end
+        if self.UsesRenderStep and self.RenderStepName then
+            pcall(function() RunService:UnbindFromRenderStep(self.RenderStepName) end)
         end
         for _,c in ipairs(self.Connections) do pcall(function() c:Disconnect() end) end
         for _,d in ipairs(self.Drawings) do Dax.removeDraw(d) end
