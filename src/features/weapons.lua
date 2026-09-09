@@ -4,8 +4,13 @@ return function(Dax)
     local ReplicatedStorage=Dax.Services.ReplicatedStorage
     local WeaponsFolder=ReplicatedStorage:FindFirstChild("Weapons")
     local WeaponMods={Originals={},Connections={}}
+    local rapidValues={FireRate=true,FireRate2=true,BFireRate=true,SFireRate=true}
     local function weaponValue(obj)
-        return obj and obj:IsA("ValueBase") and (obj.Name=="Spread" or obj.Name=="MaxSpread" or obj.Name=="RecoilControl")
+        if not obj or not obj:IsA("ValueBase") then return false end
+        local name=obj.Name
+        return name=="Spread" or name=="MaxSpread" or name=="RecoilControl"
+            or name=="EquipTime" or name=="Auto" or name=="ReloadTime"
+            or name=="Ammo" or name=="StoredAmmo" or rapidValues[name]==true
     end
     local function rememberWeaponValue(obj)
         if weaponValue(obj) and WeaponMods.Originals[obj]==nil then WeaponMods.Originals[obj]=obj.Value end
@@ -15,16 +20,24 @@ return function(Dax)
         rememberWeaponValue(obj)
         if Config.Weapons.NoSpread and (obj.Name=="Spread" or obj.Name=="MaxSpread") then obj.Value=0 end
         if Config.Weapons.NoRecoil and obj.Name=="RecoilControl" then obj.Value=0 end
+        if Config.Weapons.InstantEquip and obj.Name=="EquipTime" then obj.Value=0 end
+        if Config.Weapons.AlwaysAuto and obj.Name=="Auto" then obj.Value=true end
+        if Config.Weapons.InstantReload and obj.Name=="ReloadTime" then obj.Value=0 end
+        if Config.Weapons.InfiniteAmmo and (obj.Name=="Ammo" or obj.Name=="StoredAmmo") then obj.Value=999999 end
+        if Config.Weapons.RapidFire and rapidValues[obj.Name] then obj.Value=0.025 end
     end
     local function restoreWeaponValue(obj)
         if not weaponValue(obj) then return end
         local original=WeaponMods.Originals[obj]
         if original==nil then return end
-        if obj.Name=="Spread" or obj.Name=="MaxSpread" then
-            if not Config.Weapons.NoSpread then obj.Value=original end
-        elseif obj.Name=="RecoilControl" and not Config.Weapons.NoRecoil then
-            obj.Value=original
-        end
+        local active=(obj.Name=="Spread" or obj.Name=="MaxSpread") and Config.Weapons.NoSpread
+            or obj.Name=="RecoilControl" and Config.Weapons.NoRecoil
+            or obj.Name=="EquipTime" and Config.Weapons.InstantEquip
+            or obj.Name=="Auto" and Config.Weapons.AlwaysAuto
+            or obj.Name=="ReloadTime" and Config.Weapons.InstantReload
+            or (obj.Name=="Ammo" or obj.Name=="StoredAmmo") and Config.Weapons.InfiniteAmmo
+            or rapidValues[obj.Name] and Config.Weapons.RapidFire
+        if not active then obj.Value=original end
     end
     local function scanWeapons(fn)
         if not WeaponsFolder then return 0 end
@@ -44,6 +57,16 @@ return function(Dax)
                     obj.Value=Config.Weapons.NoSpread and 0 or original
                 elseif obj.Name=="RecoilControl" then
                     obj.Value=Config.Weapons.NoRecoil and 0 or original
+                elseif obj.Name=="EquipTime" then
+                    obj.Value=Config.Weapons.InstantEquip and 0 or original
+                elseif obj.Name=="Auto" then
+                    obj.Value=Config.Weapons.AlwaysAuto and true or original
+                elseif obj.Name=="ReloadTime" then
+                    obj.Value=Config.Weapons.InstantReload and 0 or original
+                elseif obj.Name=="Ammo" or obj.Name=="StoredAmmo" then
+                    obj.Value=Config.Weapons.InfiniteAmmo and 999999 or original
+                elseif rapidValues[obj.Name] then
+                    obj.Value=Config.Weapons.RapidFire and 0.025 or original
                 end
             end
         end
@@ -52,6 +75,11 @@ return function(Dax)
     local function restoreWeaponMods()
         Config.Weapons.NoSpread=false
         Config.Weapons.NoRecoil=false
+        Config.Weapons.InstantEquip=false
+        Config.Weapons.AlwaysAuto=false
+        Config.Weapons.InstantReload=false
+        Config.Weapons.InfiniteAmmo=false
+        Config.Weapons.RapidFire=false
         for obj in pairs(WeaponMods.Originals) do restoreWeaponValue(obj) end
     end
     if WeaponsFolder then
