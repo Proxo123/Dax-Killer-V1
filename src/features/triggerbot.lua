@@ -8,8 +8,20 @@ return function(Dax)
     local UIS=Dax.Services.UIS
     local targetSince=0
     local trackedTarget=nil
-    local firedForTarget=false
-    local clearSince=nil
+    local lastFire=0
+    local pulseBusy=false
+    local syntheticInput=false
+    local manualM1=false
+    Dax.bind(UIS.InputBegan,function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 and not syntheticInput then
+            manualM1=true
+        end
+    end)
+    Dax.bind(UIS.InputEnded,function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 and not syntheticInput then
+            manualM1=false
+        end
+    end)
     local function playerFromHit(inst)
         if not inst then return nil end
         local model=inst:FindFirstAncestorOfClass("Model")
@@ -41,23 +53,35 @@ return function(Dax)
         return player
     end
     local function click()
+        if pulseBusy then return false end
         if mouse1press and mouse1release then
+            pulseBusy=true
             task.spawn(function()
                 local pressed=false
                 local ok=pcall(function()
+                    syntheticInput=true
                     mouse1press()
                     pressed=true
-                    task.wait(0.035)
+                    task.wait(0.025)
                     mouse1release()
                     pressed=false
+                    syntheticInput=false
                 end)
                 if pressed then pcall(mouse1release) end
                 if not ok then pcall(mouse1release) end
+                syntheticInput=false
+                pulseBusy=false
             end)
             return true
         end
         if mouse1click then
-            task.spawn(function() pcall(mouse1click) end)
+            pulseBusy=true
+            task.spawn(function()
+                syntheticInput=true
+                pcall(mouse1click)
+                syntheticInput=false
+                pulseBusy=false
+            end)
             return true
         end
         return false
@@ -65,8 +89,7 @@ return function(Dax)
     function Dax.Features.Triggerbot.update()
         if not Config.Combat.Triggerbot or not App.Alive then
             trackedTarget=nil
-            firedForTarget=false
-            clearSince=nil
+            targetSince=0
             return
         end
         local menu=Dax.UI.Window
@@ -74,29 +97,22 @@ return function(Dax)
         if UIS:GetFocusedTextBox() then return end
         local target=targetUnderCrosshair()
         if not target then
-            if trackedTarget then
-                clearSince=clearSince or tick()
-                if tick()-clearSince>=0.15 then
-                    trackedTarget=nil
-                    firedForTarget=false
-                    clearSince=nil
-                end
-            end
+            trackedTarget=nil
+            targetSince=0
             return
         end
-        clearSince=nil
         if target~=trackedTarget then
             trackedTarget=target
             targetSince=tick()
-            firedForTarget=false
         end
-        if UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-            firedForTarget=true
-            return
+        if manualM1 and not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+            manualM1=false
         end
-        if firedForTarget then return end
+        if manualM1 or pulseBusy then return end
         local now=tick()
         if now-targetSince<Config.Combat.TriggerDelay then return end
-        firedForTarget=click()
+        local interval=math.max(Config.Combat.TriggerDelay,0.08)
+        if now-lastFire<interval then return end
+        if click() then lastFire=now end
     end
 end
