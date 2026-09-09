@@ -7,15 +7,24 @@ return function(Dax)
     local Camera=Dax.Camera
     local skeletonPairs={{"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},{"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},{"LowerTorso","LeftUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},{"LowerTorso","RightUpperLeg"},{"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"}}
     local bodyNames={"Head","UpperTorso","LowerTorso","LeftUpperArm","RightUpperArm","LeftHand","RightHand","LeftUpperLeg","RightUpperLeg","LeftFoot","RightFoot"}
+    local wirePartsNear={"Head","UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
+    local wirePartsFar={"Head","UpperTorso","LowerTorso","LeftUpperArm","RightUpperArm","LeftUpperLeg","RightUpperLeg"}
+    local wireCorners={
+        Vector3.new(-1,-1,-1),Vector3.new(1,-1,-1),Vector3.new(1,1,-1),Vector3.new(-1,1,-1),
+        Vector3.new(-1,-1,1),Vector3.new(1,-1,1),Vector3.new(1,1,1),Vector3.new(-1,1,1),
+    }
+    local wireEdges={{1,2},{2,3},{3,4},{4,1},{5,6},{6,7},{7,8},{8,5},{1,5},{2,6},{3,7},{4,8}}
+    local wireTicks=setmetatable({},{__mode="k"})
     local function makeESP(player)
         if player==LP or App.ESPObjects[player] then return end
-        local d={BoxO=Dax.draw("Square",{Visible=false,Filled=false,Color=Color3.new(),Thickness=3}),Box=Dax.draw("Square",{Visible=false,Filled=false,Color=Color3.new(1,1,1),Thickness=1}),HealthO=Dax.draw("Square",{Visible=false,Filled=true,Color=Color3.new()}),Health=Dax.draw("Square",{Visible=false,Filled=true,Color=Color3.new(0,1,0)}),Name=Dax.draw("Text",{Visible=false,Center=true,Outline=true,Size=14,Font=2}),Info=Dax.draw("Text",{Visible=false,Center=true,Outline=true,Size=13,Font=2}),TracerO=Dax.draw("Line",{Visible=false,Color=Color3.new(),Thickness=3}),Tracer=Dax.draw("Line",{Visible=false,Thickness=1}),Skeleton={}}
+        local d={BoxO=Dax.draw("Square",{Visible=false,Filled=false,Color=Color3.new(),Thickness=3}),Box=Dax.draw("Square",{Visible=false,Filled=false,Color=Color3.new(1,1,1),Thickness=1}),HealthO=Dax.draw("Square",{Visible=false,Filled=true,Color=Color3.new()}),Health=Dax.draw("Square",{Visible=false,Filled=true,Color=Color3.new(0,1,0)}),Name=Dax.draw("Text",{Visible=false,Center=true,Outline=true,Size=14,Font=2}),Info=Dax.draw("Text",{Visible=false,Center=true,Outline=true,Size=13,Font=2}),TracerO=Dax.draw("Line",{Visible=false,Color=Color3.new(),Thickness=3}),Tracer=Dax.draw("Line",{Visible=false,Thickness=1}),Skeleton={},Wireframe={}}
         for i=1,#skeletonPairs do d.Skeleton[i]={O=Dax.draw("Line",{Visible=false,Color=Color3.new(),Thickness=3}),L=Dax.draw("Line",{Visible=false,Thickness=1})} end
         App.ESPObjects[player]=d
     end
     local function hideESP(d)
         for k,v in pairs(d) do
             if k=="Skeleton" then for _,s2 in ipairs(v) do s2.O.Visible=false s2.L.Visible=false end
+            elseif k=="Wireframe" then for _,line in ipairs(v) do line.Visible=false end
             else v.Visible=false end
         end
     end
@@ -25,8 +34,10 @@ return function(Dax)
         hideESP(d)
         for k,v in pairs(d) do
             if k=="Skeleton" then for _,s2 in ipairs(v) do Dax.removeDraw(s2.O) Dax.removeDraw(s2.L) end
+            elseif k=="Wireframe" then for _,line in ipairs(v) do Dax.removeDraw(line) end
             else Dax.removeDraw(v) end
         end
+        wireTicks[d]=nil
         App.ESPObjects[player]=nil
     end
     local function bounds(char)
@@ -45,6 +56,54 @@ return function(Dax)
         local px=math.max(4,h*.12)
         local py=math.max(4,h*.08)
         return Vector2.new(x1-px,y1-py),Vector2.new(x2-x1+px*2,h+py*2)
+    end
+    local function hideWireframe(d)
+        for _,line in ipairs(d.Wireframe) do line.Visible=false end
+    end
+    local function wireLine(d,index)
+        local line=d.Wireframe[index]
+        if not line then
+            line=Dax.draw("Line",{Visible=false,Thickness=1,Transparency=1})
+            d.Wireframe[index]=line
+        end
+        return line
+    end
+    local function updateWireframe(d,char,dist,color,alpha,thick)
+        if not Config.ESP.Wireframe then hideWireframe(d) return end
+        local far=dist>700
+        local stride=far and 3 or 1
+        local tick=(wireTicks[d] or 0)+1
+        wireTicks[d]=tick
+        if tick%stride~=0 then return end
+        local parts=far and wirePartsFar or wirePartsNear
+        local used=0
+        for _,partName in ipairs(parts) do
+            local part=char:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                local half=part.Size*.5
+                local points={}
+                local visible=true
+                for i,corner in ipairs(wireCorners) do
+                    local world=part.CFrame:PointToWorldSpace(Vector3.new(corner.X*half.X,corner.Y*half.Y,corner.Z*half.Z))
+                    local point,on=Dax.project(world)
+                    points[i]=point
+                    if not on then visible=false end
+                end
+                if visible then
+                    for _,edge in ipairs(wireEdges) do
+                        used+=1
+                        local line=wireLine(d,used)
+                        line.From=points[edge[1]]
+                        line.To=points[edge[2]]
+                        line.Color=color
+                        line.Thickness=thick
+                        line.Transparency=alpha
+                        line.Visible=true
+                    end
+                end
+            end
+        end
+        for i=used+1,#d.Wireframe do d.Wireframe[i].Visible=false end
     end
     function Dax.Features.ESP.update(player,d)
         if not Config.ESP.Enabled then hideESP(d) return end
@@ -81,6 +140,7 @@ return function(Dax)
         local target=Vector2.new(pos.X+size.X/2,pos.Y+size.Y)
         d.TracerO.From=origin d.TracerO.To=target d.TracerO.Thickness=thick+2 d.TracerO.Transparency=alpha*.8 d.TracerO.Visible=Config.ESP.Tracers
         d.Tracer.From=origin d.Tracer.To=target d.Tracer.Color=color d.Tracer.Thickness=thick d.Tracer.Transparency=alpha d.Tracer.Visible=Config.ESP.Tracers
+        updateWireframe(d,char,dist,color,alpha,thick)
         for i,pair in ipairs(skeletonPairs) do
             local a,b=char:FindFirstChild(pair[1]),char:FindFirstChild(pair[2])
             local seg=d.Skeleton[i]
